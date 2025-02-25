@@ -31,57 +31,47 @@ export const authOptions: AuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        try {
-          console.log('Auth attempt for:', credentials?.email)
-          
-          if (!credentials?.email || !credentials?.password) {
-            throw new Error("Missing credentials")
-          }
+        if (!credentials?.email || !credentials?.password) {
+          return null
+        }
 
+        try {
           const user = await prisma.user.findUnique({
-            where: { email: credentials.email.toLowerCase() }
+            where: { 
+              email: credentials.email.toLowerCase() 
+            },
+            select: {
+              id: true,
+              email: true,
+              password: true,
+              name: true
+            }
           })
 
           if (!user || !user.password) {
-            throw new Error("Invalid email or password")
+            return null
           }
 
-          const isPasswordValid = await bcrypt.compare(
-            credentials.password,
-            user.password
-          )
-
-          if (!isPasswordValid) {
-            throw new Error("Invalid email or password")
+          const isValid = await bcrypt.compare(credentials.password, user.password)
+          
+          if (!isValid) {
+            return null
           }
 
-          return user
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name
+          }
         } catch (error) {
           console.error("Auth Error:", error)
-          throw error
+          return null
         }
       }
     })
   ],
   session: { strategy: "jwt" },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.email = user.email
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        session.user.email = token.email as string
-      }
-      return session
-    }
-  },
-  pages: {
-    signIn: "/auth"
-  },
   secret: process.env.NEXTAUTH_SECRET,
+  pages: { signIn: "/auth" },
+  debug: process.env.NODE_ENV === 'development'
 } 
