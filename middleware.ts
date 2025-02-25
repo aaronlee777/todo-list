@@ -3,12 +3,8 @@ import { getToken } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // Skip middleware for API routes, next-auth routes, and static files
-  if (
-    request.nextUrl.pathname.startsWith('/api/auth') ||
-    request.nextUrl.pathname.startsWith('/_next') ||
-    request.nextUrl.pathname.includes('/.')
-  ) {
+  // Always allow auth-related routes
+  if (request.nextUrl.pathname.startsWith('/api/auth')) {
     return NextResponse.next()
   }
 
@@ -22,7 +18,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   } else {
-    if (!isAuthPage && !isRootPage) {
+    if (!isAuthPage && !isRootPage && !request.nextUrl.pathname.startsWith('/api')) {
       return NextResponse.redirect(new URL('/auth', request.url))
     }
   }
@@ -32,12 +28,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - api/auth/* (NextAuth.js paths)
-     * - _next/* (Next.js internals)
-     * - *.* (files with extensions)
-     */
-    '/((?!api/auth/.|_next/.|[\\w-]+\\.\\w+).*)'
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ]
 }
