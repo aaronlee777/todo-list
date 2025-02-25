@@ -63,10 +63,7 @@ export const authOptions: AuthOptions = {
       }
     })
   ],
-  session: { 
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
+  session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -83,10 +80,8 @@ export const authOptions: AuthOptions = {
       return session
     }
   },
-  secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
   pages: {
-    signIn: "/auth",
-    error: "/auth"
-  }
+    signIn: "/auth"
+  },
+  secret: process.env.NEXTAUTH_SECRET,
 } 
