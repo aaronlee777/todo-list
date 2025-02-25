@@ -1,11 +1,14 @@
 import NextAuth from "next-auth"
 import { authOptions } from "./auth"
 
-// Create a single handler
-const handler = NextAuth(authOptions)
+// Export named functions instead of using handler
+export async function GET(req: Request) {
+  return await NextAuth(authOptions)(req)
+}
 
-// Export the handler directly
-export { handler as GET, handler as POST }
+export async function POST(req: Request) {
+  return await NextAuth(authOptions)(req)
+}
 
 // Add OPTIONS handler for CORS
 export async function OPTIONS() {
