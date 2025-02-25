@@ -46,14 +46,20 @@ export default function AuthForm() {
     setError(null)
     try {
       if (isLogin) {
-        await signIn("credentials", {
+        const result = await signIn("credentials", {
           redirect: false,
           email: data.email,
           password: data.password,
         })
 
-        router.push("/dashboard")
-        router.refresh()
+        if (result?.error) {
+          throw new Error(result.error)
+        }
+
+        if (result?.ok) {
+          router.push("/dashboard")
+          router.refresh()
+        }
       } else {
         const response = await fetch("/api/auth/register", {
           method: "POST",
