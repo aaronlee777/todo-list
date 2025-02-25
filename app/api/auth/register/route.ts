@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     })
 
     // Don't send the password back
-    const { password: _, ...userWithoutPassword } = user
+    const { password: _password, ...userWithoutPassword } = user
 
     return NextResponse.json(userWithoutPassword)
   } catch (error) {

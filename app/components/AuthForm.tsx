@@ -46,16 +46,12 @@ export default function AuthForm() {
     setError(null)
     try {
       if (isLogin) {
-        const result = await signIn("credentials", {
+        await signIn("credentials", {
           redirect: false,
           email: data.email,
           password: data.password,
         })
 
-        if (result?.error) {
-          throw new Error(result.error)
-        }
-        
         router.push("/dashboard")
         router.refresh()
       } else {
@@ -75,7 +71,7 @@ export default function AuthForm() {
         }
 
         // Auto-login after successful signup
-        const result = await signIn("credentials", {
+        await signIn("credentials", {
           redirect: false,
           email: data.email,
           password: data.password,
