@@ -44,44 +44,27 @@ export default function AuthForm() {
     setError(null)
     try {
       if (isLogin) {
-        console.group('Login Attempt')
-        console.log('Email:', data.email)
-        
         const result = await signIn("credentials", {
           redirect: false,
           email: data.email,
           password: data.password,
-        }).catch(err => {
-          console.error('SignIn Error:', err)
-          return null
         })
 
-        console.log('SignIn Result:', result)
-
         if (!result) {
-          const error = 'Authentication failed - no result'
-          console.error(error)
-          setError(error)
-          console.groupEnd()
+          setError("Authentication failed - please try again")
           return
         }
 
         if (result.error) {
-          console.error('SignIn Error:', result.error)
           setError(result.error)
-          console.groupEnd()
           return
         }
 
         if (result.ok) {
-          console.log('Login successful, redirecting...')
-          console.groupEnd()
-          // Add delay before redirect
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // Redirect to dashboard
           window.location.href = '/dashboard'
           return
         }
-        console.groupEnd()
       } else {
         // Registration
         const response = await fetch("/api/auth/register", {
@@ -118,9 +101,8 @@ export default function AuthForm() {
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Authentication failed"
-      console.error("Auth Error:", errorMessage)
-      setError(errorMessage)
+      console.error("Auth Error:", error)
+      setError("An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
