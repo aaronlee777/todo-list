@@ -52,6 +52,8 @@ export default function AuthForm() {
           password: data.password,
         })
 
+        console.log("SignIn Result:", result)
+
         if (result?.error) {
           setError(result.error)
           return

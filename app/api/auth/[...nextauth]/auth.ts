@@ -67,16 +67,27 @@ export const authOptions: AuthOptions = {
       }
     })
   ],
-  pages: {
-    signIn: "/auth",
-    error: "/auth"
-  },
-  debug: process.env.NODE_ENV === "development",
+  secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  pages: {
+    signIn: "/auth",
+    error: "/auth",
+  },
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: true
+      }
+    }
+  },
+  debug: process.env.NODE_ENV === "development",
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
