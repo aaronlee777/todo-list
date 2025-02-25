@@ -1,7 +1,7 @@
 import NextAuth from "next-auth"
 import { authOptions } from "./auth"
 
-// Remove any comments and keep only the essential exports
+// Export GET and POST handlers for the auth API route
 export const GET = NextAuth(authOptions)
 export const POST = NextAuth(authOptions)
 
