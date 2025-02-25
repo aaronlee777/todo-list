@@ -3,15 +3,15 @@ import { getToken } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Skip middleware for API routes and next-auth routes
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
+
   const token = await getToken({ req: request })
   const isAuth = !!token
   const isAuthPage = request.nextUrl.pathname === '/auth'
-  const isAuthApi = request.nextUrl.pathname.startsWith('/api/auth')
   const isRootPage = request.nextUrl.pathname === '/'
-
-  if (isAuthApi) {
-    return NextResponse.next()
-  }
 
   if (isAuth) {
     if (isAuthPage || isRootPage) {
@@ -27,5 +27,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/auth', '/dashboard/:path*']
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ]
 }
