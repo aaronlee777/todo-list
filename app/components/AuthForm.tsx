@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
-import { useRouter } from "next/navigation"
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -30,7 +29,6 @@ export default function AuthForm() {
   const [isLogin, setIsLogin] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),

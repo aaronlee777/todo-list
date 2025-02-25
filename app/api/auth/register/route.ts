@@ -38,8 +38,8 @@ export async function POST(req: Request) {
       }
     })
 
-    // Return user without password
-    const { password: _, ...userWithoutPassword } = user
+    // Use spread without assigning to _
+    const { password: _password, ...userWithoutPassword } = user
 
     return NextResponse.json(userWithoutPassword)
   } catch (error) {
