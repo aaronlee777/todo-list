@@ -4,6 +4,9 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcrypt"
 
+const NEXTAUTH_URL = process.env.NEXTAUTH_URL || 
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+
 declare module "next-auth" {
   interface Session {
     user: {
