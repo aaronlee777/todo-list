@@ -53,7 +53,8 @@ export default function AuthForm() {
         })
 
         if (result?.error) {
-          throw new Error(result.error)
+          setError(result.error)
+          return
         }
 
         if (result?.ok) {
@@ -87,8 +88,8 @@ export default function AuthForm() {
         router.refresh()
       }
     } catch (error) {
-      console.error("Error:", error)
-      setError(error instanceof Error ? error.message : "An unexpected error occurred")
+      console.error("Auth Error:", error)
+      setError(error instanceof Error ? error.message : "Authentication failed")
     } finally {
       setIsLoading(false)
     }

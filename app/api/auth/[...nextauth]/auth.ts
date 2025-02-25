@@ -31,49 +31,57 @@ export const authOptions: AuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Invalid credentials")
-        }
-
-        const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email.toLowerCase()
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            throw new Error("Missing credentials")
           }
-        })
 
-        if (!user || !user.password) {
-          throw new Error("Invalid credentials")
-        }
+          const user = await prisma.user.findUnique({
+            where: {
+              email: credentials.email.toLowerCase()
+            }
+          })
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        )
+          if (!user || !user.password) {
+            throw new Error("Invalid email or password")
+          }
 
-        if (!isPasswordValid) {
-          throw new Error("Invalid credentials")
-        }
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          )
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name
+          if (!isPasswordValid) {
+            throw new Error("Invalid email or password")
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name
+          }
+        } catch (error) {
+          console.error("Auth Error:", error)
+          throw error
         }
       }
     })
   ],
+  pages: {
+    signIn: "/auth",
+    error: "/auth"
+  },
+  debug: process.env.NODE_ENV === "development",
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60
   },
+  secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        return {
-          ...token,
-          id: user.id,
-          email: user.email || ''
-        }
+        token.id = user.id
+        token.email = user.email
       }
       return token
     },
@@ -83,15 +91,6 @@ export const authOptions: AuthOptions = {
         session.user.email = token.email
       }
       return session
-    },
-    async redirect({ url, baseUrl }) {
-      if (url.startsWith("/")) return `${baseUrl}${url}`
-      else if (new URL(url).origin === baseUrl) return url
-      return baseUrl
     }
-  },
-  pages: {
-    signIn: "/auth",
-    error: "/auth",
   }
 } 
