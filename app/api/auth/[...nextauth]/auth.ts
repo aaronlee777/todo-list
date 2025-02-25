@@ -17,7 +17,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id: string
-    email: string
+    email: string | null | undefined
   }
 }
 
@@ -81,14 +81,14 @@ export const authOptions: AuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.email = user.email
+        token.email = user.email || ''
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id
-        session.user.email = token.email
+        session.user.email = token.email || ''
       }
       return session
     }
