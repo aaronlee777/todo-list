@@ -9,43 +9,43 @@ export async function POST(req: Request) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { message: "Missing email or password" },
+        { error: "Missing email or password" },
         { status: 400 }
       )
     }
 
-    const exists = await prisma.user.findUnique({
-      where: {
-        email
-      }
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() }
     })
 
-    if (exists) {
+    if (existingUser) {
       return NextResponse.json(
-        { message: "User already exists" },
-        { status: 400 }
+        { error: "Email already registered" },
+        { status: 409 }
       )
     }
 
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
+    // Create user
     const user = await prisma.user.create({
       data: {
-        email,
-        password: hashedPassword,
-        name: name || null
+        email: email.toLowerCase(),
+        name,
+        password: hashedPassword
       }
     })
 
-    // Don't send the password back
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _password, ...userWithoutPassword } = user
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user
 
     return NextResponse.json(userWithoutPassword)
   } catch (error) {
     console.error("[REGISTER_ERROR]", error)
     return NextResponse.json(
-      { message: "Internal server error" },
+      { error: "Internal server error" },
       { status: 500 }
     )
   }

@@ -1,10 +1,9 @@
 import NextAuth from "next-auth"
 import { authOptions } from "./auth"
 
-const handler = NextAuth(authOptions)
+// Remove any comments and keep only the essential exports
+export const GET = NextAuth(authOptions)
+export const POST = NextAuth(authOptions)
 
-export const runtime = 'edge'
-
-// Make sure both GET and POST are handled
-export const GET = handler
-export const POST = handler
+// Remove the edge runtime line
+// export const runtime = 'edge'

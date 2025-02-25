@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -46,52 +46,83 @@ export default function AuthForm() {
     setError(null)
     try {
       if (isLogin) {
+        console.group('Login Attempt')
+        console.log('Email:', data.email)
+        
+        const result = await signIn("credentials", {
+          redirect: false,
+          email: data.email,
+          password: data.password,
+        }).catch(err => {
+          console.error('SignIn Error:', err)
+          return null
+        })
+
+        console.log('SignIn Result:', result)
+
+        if (!result) {
+          const error = 'Authentication failed - no result'
+          console.error(error)
+          setError(error)
+          console.groupEnd()
+          return
+        }
+
+        if (result.error) {
+          console.error('SignIn Error:', result.error)
+          setError(result.error)
+          console.groupEnd()
+          return
+        }
+
+        if (result.ok) {
+          console.log('Login successful, redirecting...')
+          console.groupEnd()
+          // Add delay before redirect
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          window.location.href = '/dashboard'
+          return
+        }
+        console.groupEnd()
+      } else {
+        // Registration
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            password: data.password,
+            name: data.name || undefined
+          }),
+        })
+
+        const responseData = await response.json()
+
+        if (!response.ok) {
+          throw new Error(responseData.error || "Registration failed")
+        }
+
+        // Auto-login after registration
         const result = await signIn("credentials", {
           redirect: false,
           email: data.email,
           password: data.password,
         })
 
-        console.log("SignIn Result:", result)
-
         if (result?.error) {
-          setError(result.error)
-          return
+          throw new Error(result.error)
         }
 
         if (result?.ok) {
-          router.push("/dashboard")
-          router.refresh()
+          // Force navigation and refresh
+          window.location.href = '/dashboard'
+          return
         }
-      } else {
-        const response = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        })
-
-        const responseData = await response.json()
-
-        if (!response.ok) {
-          if (response.status === 409) {
-            throw new Error("There is already an account with this email address")
-          }
-          throw new Error(responseData.message || "Signup failed")
-        }
-
-        // Auto-login after successful signup
-        await signIn("credentials", {
-          redirect: false,
-          email: data.email,
-          password: data.password,
-        })
-        
-        router.push("/dashboard")
-        router.refresh()
       }
     } catch (error) {
-      console.error("Auth Error:", error)
-      setError(error instanceof Error ? error.message : "Authentication failed")
+      const errorMessage = error instanceof Error ? error.message : "Authentication failed"
+      console.error("Auth Error:", errorMessage)
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }

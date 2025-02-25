@@ -32,14 +32,14 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         try {
+          console.log('Auth attempt for:', credentials?.email)
+          
           if (!credentials?.email || !credentials?.password) {
             throw new Error("Missing credentials")
           }
 
           const user = await prisma.user.findUnique({
-            where: {
-              email: credentials.email.toLowerCase()
-            }
+            where: { email: credentials.email.toLowerCase() }
           })
 
           if (!user || !user.password) {
@@ -55,11 +55,7 @@ export const authOptions: AuthOptions = {
             throw new Error("Invalid email or password")
           }
 
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name
-          }
+          return user
         } catch (error) {
           console.error("Auth Error:", error)
           throw error
@@ -67,41 +63,30 @@ export const authOptions: AuthOptions = {
       }
     })
   ],
-  secret: process.env.NEXTAUTH_SECRET,
-  session: {
+  session: { 
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  pages: {
-    signIn: "/auth",
-    error: "/auth",
-  },
-  cookies: {
-    sessionToken: {
-      name: `__Secure-next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: true
-      }
-    }
-  },
-  debug: process.env.NODE_ENV === "development",
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.email = user.email || ''
+        token.email = user.email
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id
-        session.user.email = token.email || ''
+        session.user.email = token.email
       }
       return session
     }
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: true,
+  pages: {
+    signIn: "/auth",
+    error: "/auth"
   }
 } 
