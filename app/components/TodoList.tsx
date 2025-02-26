@@ -343,13 +343,16 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
     );
   }
 
-  if (todos.length === 0) {
+  // Calculate active todos count here
+  const activeTodosCount = todos.filter(todo => !todo.completed).length;
+
+  if (activeTodosCount === 0) {
     return (
       <TodoListCard>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>You have no tasks</CardTitle>
           <Button size="sm" onClick={() => dialogRef.current?.showModal()}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="h-4 w-4" />
             Add new todo
           </Button>
         </CardHeader>
@@ -362,9 +365,9 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
     );
   }
 
-  // Only group non-completed todos
+  // Group todos and continue with the rest of the component
   const groupedTodos = todos.reduce((groups, todo) => {
-    if (!todo.completed) {  // Only include non-completed todos
+    if (!todo.completed) {
       const dateKey = todo.dueDate
         ? new Date(todo.dueDate).toISOString().split('T')[0]
         : 'no-date';
@@ -375,9 +378,6 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
     return groups;
   }, {} as Record<string, Todo[]>);
 
-  // Keep the active count for the header
-  const activeTodosCount = todos.filter(todo => !todo.completed).length;
-
   return (
     <TodoListCard>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -385,7 +385,7 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
           You have {activeTodosCount} task{activeTodosCount !== 1 ? "s" : ""}
         </CardTitle>
         <Button size="sm" onClick={() => dialogRef.current?.showModal()}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="h-4 w-4" />
           Add new todo
         </Button>
       </CardHeader>

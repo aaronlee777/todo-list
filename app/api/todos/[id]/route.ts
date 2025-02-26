@@ -40,4 +40,32 @@ export async function PATCH(
       { status: 500 }
     )
   }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  try {
+    await prisma.todo.delete({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Failed to delete todo:", error)
+    return NextResponse.json(
+      { error: "Failed to delete todo" },
+      { status: 500 }
+    )
+  }
 } 

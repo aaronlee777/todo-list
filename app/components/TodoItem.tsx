@@ -5,10 +5,11 @@ import { Badge } from "@/components/ui/badge"
 import { CustomCheckbox } from "@/app/components/ui/custom-checkbox"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { Pencil } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { EditDialog } from "./EditDialog"
 import type { Todo } from "@/app/types/todo"
+import { DeleteAlert } from "./DeleteAlert"
 
 interface TodoItemProps {
   todo: Todo
@@ -21,6 +22,7 @@ export function TodoItem({ todo, onComplete, onUpdate }: TodoItemProps) {
   const [completed, setCompleted] = useState(todo.completed)
   const [isVisible, setIsVisible] = useState(true)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const priorityColors = {
     LOW: "bg-blue-100 text-blue-800",
@@ -95,12 +97,25 @@ export function TodoItem({ todo, onComplete, onUpdate }: TodoItemProps) {
         >
           <Pencil className="h-4 w-4" />
         </Button>
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => setDeleteDialogOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
       <EditDialog 
         todo={todo}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         onRefresh={onUpdate}
+      />
+      <DeleteAlert
+        todoId={todo.id}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onDelete={onComplete || (() => Promise.resolve())}
       />
     </div>
   )
