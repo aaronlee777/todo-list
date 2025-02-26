@@ -2,6 +2,7 @@ import { Inter } from "next/font/google"
 import { AuthProvider } from "@/app/providers/AuthProvider"
 import "./globals.css"
 import { Toaster } from "sonner"
+import { cn } from "@/lib/utils"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -20,7 +21,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className={inter.className}>
+      <body className={cn(inter.className, "bg-white")}>
         <AuthProvider>{children}</AuthProvider>
         <Toaster />
       </body>
