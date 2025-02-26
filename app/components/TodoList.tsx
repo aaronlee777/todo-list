@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from "react"
-import { format, isToday, startOfDay, addDays } from "date-fns"
-import { DndContext, DragEndEvent, closestCenter, DragOverlay, useSensors, useSensor, PointerSensor } from "@dnd-kit/core"
+import { useEffect, useState, useCallback, forwardRef, useImperativeHandle, useMemo } from "react"
+import { format } from "date-fns"
+import { DndContext, DragEndEvent, closestCenter, useSensors, useSensor, PointerSensor, DragOverlay, DragStartEvent, MeasuringStrategy, DragOverEvent, pointerWithin, Modifier, Active, Over } from "@dnd-kit/core"
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable"
 import { DraggableTodoItem } from "./DraggableTodoItem"
 import { Separator } from "@/components/ui/separator"
@@ -10,6 +11,8 @@ import { toast } from "sonner"
 import { useDroppable } from "@dnd-kit/core"
 import { cn } from "@/lib/utils"
 import { useSession } from "next-auth/react"
+import { DragOverlayItem } from "./DragOverlayItem"
+import type { Transform } from "@dnd-kit/core"
 
 interface Todo {
   id: string
@@ -20,35 +23,62 @@ interface Todo {
   completed: boolean
 }
 
-// Create a new DroppableSection component
-function DroppableSection({ dateKey, children }: { dateKey: string, children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `droppable-${dateKey}`,
-    data: { dateKey },
-  })
+// Types can stay at the top level
+type SortingState = {
+  activeId: string | null;
+  overId: string | null;
+  activeRect?: DOMRect | null;
+  overRect?: DOMRect | null;
+};
 
-  return (
-    <div 
-      ref={setNodeRef} 
-      className={cn(
-        "min-h-[2rem] transition-colors",
-        isOver && "bg-muted/50"
-      )}
-    >
-      {children}
-    </div>
-  )
-}
+type Position = {
+  x: number;
+  y: number;
+};
+
+type DragState = {
+  initialParent: string | null;
+  currentParent: string | null;
+};
+
+// Add this type for section-based todos
+type SectionTodos = Record<string, Todo[]>;
 
 export interface TodoListRef {
   refresh: () => Promise<void>
 }
 
+const measuringStrategy = {
+  strategy: MeasuringStrategy.Always
+}
+
+// Move findContainer outside the component
+function createFindContainer(todos: Todo[]) {
+  return function findContainer(todoId: string) {
+    const todo = todos.find(t => t.id === todoId);
+    if (!todo) return null;
+    
+    return todo.dueDate 
+      ? new Date(todo.dueDate).toISOString().split('T')[0]
+      : 'no-date';
+  };
+}
+
 export const TodoList = forwardRef<TodoListRef>((_, ref) => {
-  const { data: session, status } = useSession()
-  const [todos, setTodos] = useState<Todo[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const { data: session, status } = useSession();
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTodo, setActiveTodo] = useState<Todo | null>(null);
+  const [dragState, setDragState] = useState<DragState>({
+    initialParent: null,
+    currentParent: null,
+  });
+  const [sorting, setSorting] = useState<SortingState>({
+    activeId: null,
+    overId: null,
+    activeRect: null,
+    overRect: null,
+  });
 
   console.log("TodoList Session:", { session, status })
 
@@ -60,6 +90,9 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
     })
   )
 
+  // Memoize the findContainer function
+  const findContainer = useMemo(() => createFindContainer(todos), [todos]);
+
   const fetchTodos = useCallback(async () => {
     if (!session) {
       console.log("No session available")
@@ -67,26 +100,136 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
     }
 
     try {
-      console.log("Fetching todos with session:", session)
       const response = await fetch('/api/todos', {
         credentials: 'include'
-      })
+      });
       
-      const data = await response.json()
+      const data = await response.json();
       
       if (!response.ok) {
-        console.error("API Error:", data)
-        throw new Error(data.error || data.details || 'Failed to fetch todos')
+        throw new Error(data.error || data.details || 'Failed to fetch todos');
       }
 
-      setTodos(data)
-    } catch (error: unknown) {
-      console.error("Fetch error:", error)
-      toast.error("Failed to load todos")
+      setTodos(data);
+    } catch (error) {
+      console.error("Fetch error:", error);
+      toast.error("Failed to load todos");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [session])
+  }, [session]);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const todo = todos.find(t => t.id === event.active.id);
+    setActiveTodo(todo || null);
+    
+    const container = findContainer(event.active.id.toString());
+    setDragState({
+      initialParent: container,
+      currentParent: container,
+    });
+  }, [todos, findContainer]);
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const overId = over.id.toString();
+    const overContainer = overId.startsWith('droppable-') 
+      ? overId.replace('droppable-', '') 
+      : findContainer(overId);
+
+    setDragState(prev => ({
+      ...prev,
+      currentParent: overContainer,
+    }));
+
+    setSorting({
+      activeId: active.id.toString(),
+      overId: overId,
+      activeRect: active.rect.current,
+      overRect: over.rect,
+    });
+  }, [findContainer]);
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = active.id.toString();
+    const overId = over.id.toString();
+    
+    const activeContainer = findContainer(activeId);
+    const overContainer = overId.startsWith('droppable-') 
+      ? overId.replace('droppable-', '')
+      : findContainer(overId);
+    
+    if (!activeContainer || !overContainer) return;
+
+    // Store current state for rollback
+    const previousTodos = [...todos];
+
+    try {
+      // Update UI immediately
+      setTodos(prev => {
+        const newTodos = [...prev];
+        const oldIndex = newTodos.findIndex(t => t.id === activeId);
+        const newIndex = overId.startsWith('droppable-')
+          ? newTodos.length
+          : newTodos.findIndex(t => t.id === overId);
+
+        if (oldIndex !== -1) {
+          const [item] = newTodos.splice(oldIndex, 1);
+          if (overContainer !== activeContainer) {
+            item.dueDate = overContainer === 'no-date' ? null : new Date(overContainer);
+          }
+          newTodos.splice(newIndex, 0, item);
+        }
+
+        return newTodos;
+      });
+
+      // Make API call after UI update
+      if (activeContainer !== overContainer) {
+        const response = await fetch(`/api/todos/${activeId}/move`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetDate: overContainer === 'no-date' ? null : overContainer,
+            overId: overId.startsWith('droppable-') ? null : overId,
+          }),
+        });
+
+        if (!response.ok) throw new Error('Failed to move todo');
+      } else if (!overId.startsWith('droppable-')) {
+        const response = await fetch('/api/todos/reorder', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeId, overId }),
+        });
+
+        if (!response.ok) throw new Error('Failed to reorder todos');
+      }
+    } catch (error) {
+      // Revert to previous state on error
+      setTodos(previousTodos);
+      toast.error("Failed to update todos");
+      console.error('Update error:', error);
+    }
+
+    // Reset states
+    setActiveTodo(null);
+    setSorting({
+      activeId: null,
+      overId: null,
+      activeRect: null,
+      overRect: null,
+    });
+    setDragState({
+      initialParent: null,
+      currentParent: null,
+    });
+  }, [todos, findContainer]);
 
   // Expose the refresh method via ref
   useImperativeHandle(ref, () => ({
@@ -96,6 +239,20 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
   useEffect(() => {
     fetchTodos()
   }, [fetchTodos])
+
+  // Add DroppableSection component inside TodoList
+  function DroppableSection({ dateKey, children }: { dateKey: string, children: React.ReactNode }) {
+    const { setNodeRef } = useDroppable({
+      id: `droppable-${dateKey}`,
+      data: { dateKey },
+    });
+
+    return (
+      <div ref={setNodeRef}>
+        {children}
+      </div>
+    );
+  }
 
   if (!session) {
     return null
@@ -119,178 +276,117 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
     )
   }
 
-  // Group todos by due date
+  // Group todos by date in the render function
   const groupedTodos = todos
     .filter(todo => !todo.completed)
     .reduce((groups, todo) => {
-      if (!todo.dueDate) {
-        if (!groups['no-date']) {
-          groups['no-date'] = []
-        }
-        groups['no-date'].push(todo)
-        return groups
-      }
-
-      const date = new Date(todo.dueDate)
-      const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+      const dateKey = todo.dueDate 
+        ? new Date(todo.dueDate).toISOString().split('T')[0]
+        : 'no-date';
       
-      if (!groups[dateKey]) {
-        groups[dateKey] = []
-      }
-      groups[dateKey].push(todo)
-      return groups
-    }, {} as Record<string, Todo[]>)
-
-  // Sort dates
-  const sortedDates = Object.keys(groupedTodos).sort((a, b) => {
-    if (a === 'no-date') return 1
-    if (b === 'no-date') return -1
-    return new Date(a).getTime() - new Date(b).getTime()
-  })
-
-  // Create today's date key in the same format we use for grouping
-  const today = new Date()
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    
-    if (!over) return
-
-    const activeId = active.id.toString()
-    const overId = over.id.toString()
-    
-    // Find the containers
-    const activeContainer = findContainer(activeId)
-    const overContainer = overId.startsWith('droppable-') 
-      ? overId.replace('droppable-', '')
-      : findContainer(overId)
-    
-    if (!activeContainer || !overContainer) return
-
-    // If moving to a different date
-    if (activeContainer !== overContainer) {
-      try {
-        const targetDate = overContainer === 'no-date' ? null : overContainer
-
-        const response = await fetch(`/api/todos/${activeId}/move`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            targetDate,
-          }),
-        })
-
-        const responseData = await response.json()
-        if (!response.ok) {
-          throw new Error(responseData.error || 'Failed to move todo')
-        }
-
-        await fetchTodos()
-      } catch (error) {
-        toast.error("Failed to move todo")
-        console.error('Move error:', error)
-      }
-    }
-    // If reordering within the same date section
-    else if (!overId.startsWith('droppable-')) {
-      try {
-        const response = await fetch('/api/todos/reorder', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            activeId,
-            overId,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to reorder todos')
-        }
-
-        // Update local state for immediate feedback
-        const oldIndex = groupedTodos[activeContainer].findIndex(t => t.id === activeId)
-        const newIndex = groupedTodos[activeContainer].findIndex(t => t.id === overId)
-
-        if (oldIndex !== -1 && newIndex !== -1) {
-          const newTodos = [...todos]
-          const activeDate = groupedTodos[activeContainer]
-          const reorderedDate = arrayMove(activeDate, oldIndex, newIndex)
-          
-          const updatedTodos = newTodos.map(todo => {
-            const reorderedTodo = reorderedDate.find(t => t.id === todo.id)
-            return reorderedTodo || todo
-          })
-
-          setTodos(updatedTodos)
-        }
-      } catch (error) {
-        toast.error("Failed to reorder todos")
-        console.error('Reorder error:', error)
-        // Refresh to ensure correct order
-        await fetchTodos()
-      }
-    }
-  }
-
-  // Helper function to find which date container a todo belongs to
-  function findContainer(todoId: string) {
-    for (const [dateKey, dateTodos] of Object.entries(groupedTodos)) {
-      if (dateTodos.find(todo => todo.id === todoId)) {
-        return dateKey
-      }
-    }
-    return null
-  }
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(todo);
+      return groups;
+    }, {} as Record<string, Todo[]>);
 
   return (
     <DndContext 
       sensors={sensors}
-      collisionDetection={closestCenter} 
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        {sortedDates.map((dateKey) => (
-          <div key={dateKey} className="space-y-2">
-            <div>
-              <h3 className="text-sm font-medium">
-                {dateKey === 'no-date' ? (
-                  'No Due Date'
-                ) : dateKey === todayKey ? (
-                  'Today'
-                ) : (
-                  format(new Date(`${dateKey}T12:00:00.000Z`), 'EEEE, MMMM d')
-                )}
-              </h3>
-              <Separator className="mt-2" />
+        {Object.keys(groupedTodos).map((dateKey) => {
+          const dateTodos = groupedTodos[dateKey];
+
+          return (
+            <div key={dateKey} className="space-y-2">
+              <div>
+                <h3 className="text-sm font-medium">
+                  {dateKey === 'no-date' ? (
+                    'No Due Date'
+                  ) : dateKey === 'today' ? (
+                    'Today'
+                  ) : (
+                    format(new Date(`${dateKey}T12:00:00.000Z`), 'EEEE, MMMM d')
+                  )}
+                </h3>
+                <Separator className="mt-2" />
+              </div>
+              <DroppableSection dateKey={dateKey}>
+                <SortableContext 
+                  items={dateTodos.map(todo => todo.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div>
+                    {dateTodos.map((todo, index) => {
+                      const isLastItem = index === dateTodos.length - 1;
+                      const isOverThisItem = sorting.overId === todo.id && dragState.currentParent === dateKey;
+                      const isOverSection = sorting.overId === `droppable-${dateKey}`;
+                      
+                      const showGap = (() => {
+                        if (!isOverThisItem && !isOverSection) return null;
+                        if (isOverSection && isLastItem) return 'after';
+                        if (!isOverThisItem || sorting.activeId === todo.id) return null;
+
+                        const activeRect = sorting.activeRect;
+                        const overRect = sorting.overRect;
+                        if (!activeRect || !overRect) return null;
+
+                        const activeCenter = activeRect.top + activeRect.height / 2;
+                        const overCenter = overRect.top + overRect.height / 2;
+                        
+                        return activeCenter < overCenter ? 'before' : 'after';
+                      })();
+
+                      return (
+                        <div key={`${dateKey}-${todo.id}${dragState.currentParent === dateKey ? '-current' : ''}`}>
+                          {showGap === 'before' && (
+                            <div style={{ height: '72px' }} />
+                          )}
+                          <div 
+                            style={{
+                              display: dragState.initialParent === dateKey && 
+                                      dragState.currentParent !== dateKey && 
+                                      activeTodo?.id === todo.id ? 'none' : undefined
+                            }}
+                          >
+                            <DraggableTodoItem 
+                              todo={todo} 
+                              onComplete={fetchTodos}
+                              showSeparator={!isLastItem}
+                            />
+                          </div>
+                          {showGap === 'after' && (
+                            <div style={{ height: '72px' }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DroppableSection>
             </div>
-            <DroppableSection dateKey={dateKey}>
-              <SortableContext 
-                items={groupedTodos[dateKey].map(todo => todo.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div>
-                  {groupedTodos[dateKey].map((todo, index) => (
-                    <div key={todo.id}>
-                      <DraggableTodoItem 
-                        todo={todo} 
-                        onComplete={fetchTodos}
-                      />
-                      {index < groupedTodos[dateKey].length - 1 && (
-                        <Separator />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </SortableContext>
-            </DroppableSection>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      <DragOverlay dropAnimation={null}>
+        {activeTodo && (
+          <div 
+            style={{ 
+              width: 'calc(100vw - 2rem)', 
+              maxWidth: '42rem',
+              cursor: 'grabbing',
+              transform: 'rotate(2deg)',
+            }}
+          >
+            <DragOverlayItem todo={activeTodo} />
+          </div>
+        )}
+      </DragOverlay>
     </DndContext>
   )
 })
