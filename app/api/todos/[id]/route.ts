@@ -14,20 +14,29 @@ export async function PATCH(
   }
 
   try {
+    let data = {}
+    
+    // Only try to parse body if content exists
+    if (req.headers.get("content-length") !== "0") {
+      data = await req.json()
+    } else {
+      // If no body, this is a completion request
+      data = { completed: true }
+    }
+
     const todo = await prisma.todo.update({
       where: {
         id: params.id,
+        userId: session.user.id, // Make sure user owns the todo
       },
-      data: {
-        completed: true,
-      },
+      data,
     })
 
     return NextResponse.json(todo)
   } catch (error) {
     console.error("Failed to update todo:", error)
     return NextResponse.json(
-      { error: "Failed to update todo" },
+      { error: error instanceof Error ? error.message : "Failed to update todo" },
       { status: 500 }
     )
   }

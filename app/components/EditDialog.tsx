@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, forwardRef, useImperativeHandle } from "react"
+import { useState, forwardRef } from "react"
 import { DatePicker } from "@/app/components/DatePicker"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -30,7 +30,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { useSession } from "next-auth/react"
+import type { Todo } from "@/app/types/todo"
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -41,75 +41,62 @@ const formSchema = z.object({
 
 type TodoFormValues = z.infer<typeof formSchema>
 
-// Add type for dialog ref
-interface DialogRef {
-  showModal: () => void;
+interface EditDialogProps {
+  todo: Todo;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRefresh: (updatedTodo: Partial<Todo> & { id: string }) => Promise<void>;
 }
 
-export const TodoDialog = forwardRef<DialogRef, { onRefresh: () => Promise<void> }>(({ onRefresh }, ref) => {
-  const [open, setOpen] = useState(false)
+export function EditDialog({ todo, open, onOpenChange, onRefresh }: EditDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { data: session } = useSession()
   
   const form = useForm<TodoFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: "",
-      description: "",
-      priority: "LOW",
-      dueDate: undefined,
+      title: todo.title,
+      description: todo.description || "",
+      priority: todo.priority as "LOW" | "MEDIUM" | "HIGH",
+      dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
     },
   })
 
-  useImperativeHandle(ref, () => ({
-    showModal: () => setOpen(true)
-  }));
-
   async function onSubmit(data: TodoFormValues) {
-    if (!session) {
-      toast.error("Please sign in")
-      return
-    }
-
     setIsLoading(true)
     try {
-      const response = await fetch('/api/todos', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          ...data,
-          dueDate: data.dueDate?.toISOString()
-        }),
+      const updatedTodo = {
+        id: todo.id,
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        dueDate: data.dueDate?.toISOString(),
+      }
+
+      const response = await fetch(`/api/todos/${todo.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTodo),
       })
 
-      const responseData = await response.json()
+      if (!response.ok) throw new Error('Failed to update todo')
 
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Failed to create todo')
-      }
-
-      toast.success("Todo created successfully")
-      form.reset()
-      setOpen(false)
-      if (onRefresh) {
-        await onRefresh()
-      }
+      await onRefresh(updatedTodo)
+      
+      toast.success("Todo updated successfully")
+      onOpenChange(false)
     } catch (error) {
-      console.error('Create todo error:', error)
-      toast.error(error instanceof Error ? error.message : "Failed to create todo")
+      console.error('Update error:', error)
+      toast.error("Failed to update todo")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Create New Todo</DialogTitle>
+          <DialogTitle>Edit Todo</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -126,7 +113,6 @@ export const TodoDialog = forwardRef<DialogRef, { onRefresh: () => Promise<void>
                 </FormItem>
               )}
             />
-            
             <FormField
               control={form.control}
               name="description"
@@ -135,15 +121,15 @@ export const TodoDialog = forwardRef<DialogRef, { onRefresh: () => Promise<void>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Enter todo description"
-                      {...field}
+                      placeholder="Add a description" 
+                      className="resize-none" 
+                      {...field} 
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
             <FormField
               control={form.control}
               name="priority"
@@ -166,7 +152,6 @@ export const TodoDialog = forwardRef<DialogRef, { onRefresh: () => Promise<void>
                 </FormItem>
               )}
             />
-
             <FormField
               control={form.control}
               name="dueDate"
@@ -198,15 +183,12 @@ export const TodoDialog = forwardRef<DialogRef, { onRefresh: () => Promise<void>
                 </FormItem>
               )}
             />
-
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating..." : "Create Todo"}
+              {isLoading ? "Updating..." : "Update Todo"}
             </Button>
           </form>
         </Form>
       </DialogContent>
     </Dialog>
   )
-})
-
-TodoDialog.displayName = 'TodoDialog'; 
+} 

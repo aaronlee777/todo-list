@@ -3,22 +3,18 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { TodoItem } from "./TodoItem"
-import type { Todo } from "@/types/todo"
-import { Separator } from "@/components/ui/separator"
-import { useEffect, useState } from "react"
+import type { Todo } from "@/app/types/todo"
 
 interface DraggableTodoItemProps {
   todo: Todo
   onComplete?: () => Promise<void>
-  showSeparator?: boolean
-  isRecentlyPlaced?: boolean
+  onUpdate: (updatedTodo: Partial<Todo> & { id: string }) => Promise<void>
 }
 
 export function DraggableTodoItem({ 
   todo, 
   onComplete, 
-  showSeparator = false,
-  isRecentlyPlaced = false
+  onUpdate, 
 }: DraggableTodoItemProps) {
   const {
     attributes,
@@ -44,10 +40,8 @@ export function DraggableTodoItem({
       'transform 0.3s ease-in-out'
     ].join(', '),
     opacity: isDragging ? 0 : 1,
-    pointerEvents: isDragging ? 'none' : undefined,
-    backgroundColor: isRecentlyPlaced ? 'var(--highlight-color)' : undefined,
-    transform: isRecentlyPlaced ? 'scale(1.02)' : CSS.Transform.toString(transform),
-  }
+    pointerEvents: isDragging ? 'none' as const : undefined,
+  } as const;
 
   return (
     <div 
@@ -62,8 +56,11 @@ export function DraggableTodoItem({
       }
       className="rounded-lg transition-all"
     >
-      <TodoItem todo={todo} onComplete={onComplete} />
-      {showSeparator && <Separator />}
+      <TodoItem 
+        todo={todo} 
+        onComplete={onComplete}
+        onUpdate={onUpdate}
+      />
     </div>
   )
 } 

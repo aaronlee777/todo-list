@@ -5,22 +5,22 @@ import { Badge } from "@/components/ui/badge"
 import { CustomCheckbox } from "@/app/components/ui/custom-checkbox"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { Pencil } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { EditDialog } from "./EditDialog"
+import type { Todo } from "@/app/types/todo"
 
 interface TodoItemProps {
-  todo: {
-    id: string
-    title: string
-    description?: string | null
-    priority: string
-    completed: boolean
-  }
-  onComplete?: () => void
+  todo: Todo
+  onComplete?: () => Promise<void>
+  onUpdate: (updatedTodo: Partial<Todo> & { id: string }) => Promise<void>
 }
 
-export function TodoItem({ todo, onComplete }: TodoItemProps) {
+export function TodoItem({ todo, onComplete, onUpdate }: TodoItemProps) {
   const [isCompleting, setIsCompleting] = useState(false)
   const [completed, setCompleted] = useState(todo.completed)
   const [isVisible, setIsVisible] = useState(true)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
 
   const priorityColors = {
     LOW: "bg-blue-100 text-blue-800",
@@ -35,26 +35,26 @@ export function TodoItem({ todo, onComplete }: TodoItemProps) {
     try {
       const response = await fetch(`/api/todos/${todo.id}`, {
         method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ completed: true })
       })
 
+      const data = await response.json()
       if (!response.ok) {
-        throw new Error('Failed to update todo')
+        throw new Error(data.error || 'Failed to update todo')
       }
 
       setCompleted(true)
-      // Start fade out
       setTimeout(() => {
         setIsVisible(false)
-        // Wait for fade animation to complete before removing from list
         setTimeout(() => {
-          onComplete?.()
+          if (onComplete) onComplete()
         }, 300)
       }, 300)
-    } catch (error: unknown) {
-      toast.error("Failed to update todo")
-      if (error instanceof Error) {
-        console.error(error.message)
-      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update todo")
       setIsCompleting(false)
     }
   }
@@ -87,6 +87,21 @@ export function TodoItem({ todo, onComplete }: TodoItemProps) {
           <p className="text-sm text-gray-500">{todo.description}</p>
         )}
       </div>
+      <div className="flex gap-2">
+        <Button 
+          variant="ghost" 
+          size="icon"
+          onClick={() => setEditDialogOpen(true)}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </div>
+      <EditDialog 
+        todo={todo}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onRefresh={onUpdate}
+      />
     </div>
   )
 } 
