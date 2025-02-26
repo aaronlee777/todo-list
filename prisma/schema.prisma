@@ -41,6 +41,7 @@ model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
+  password      String?
   emailVerified DateTime?
   image         String?
   accounts      Account[]
@@ -68,10 +69,4 @@ model Todo {
   dueDate     DateTime?
   order       Int      @default(0)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
 }

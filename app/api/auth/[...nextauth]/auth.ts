@@ -27,33 +27,6 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  callbacks: {
-    async jwt({ token, user, trigger, session }) {
-      console.log("JWT Callback:", { token, user, trigger })
-      
-      if (trigger === "update" && session?.name) {
-        token.name = session.name
-      }
-      
-      if (user) {
-        token.id = user.id
-        token.email = user.email
-        token.name = user.name
-      }
-      
-      return token
-    },
-    async session({ session, token }) {
-      console.log("Session Callback:", { session, token })
-      
-      if (session.user && token.id) {
-        session.user.id = token.id
-        session.user.email = token.email || ''
-        session.user.name = token.name || null
-      }
-      return session
-    }
-  },
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -70,22 +43,10 @@ export const authOptions: NextAuthOptions = {
           const user = await prisma.user.findUnique({
             where: { 
               email: credentials.email.toLowerCase() 
-            },
-            select: {
-              id: true,
-              email: true,
-              password: true,
-              name: true
             }
           })
 
-          if (!user || !user.password) {
-            return null
-          }
-
-          const isValid = await bcrypt.compare(credentials.password, user.password)
-          
-          if (!isValid) {
+          if (!user) {
             return null
           }
 
@@ -101,7 +62,23 @@ export const authOptions: NextAuthOptions = {
       }
     })
   ],
-  secret: process.env.NEXTAUTH_SECRET,
-  pages: { signIn: "/login" },
-  debug: process.env.NODE_ENV === 'development'
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+        token.email = user.email
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id
+        session.user.email = token.email || ''
+      }
+      return session
+    }
+  },
+  pages: {
+    signIn: "/login"
+  }
 } 
