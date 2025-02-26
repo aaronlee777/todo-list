@@ -1,32 +1,35 @@
 "use client"
 
-import { useCallback, useRef } from "react"
-import { Session } from "next-auth"
+import { useSession } from "next-auth/react"
 import { TodoDialog } from "@/app/components/TodoDialog"
 import { TodoList } from "@/app/components/TodoList"
+import { useCallback, useRef } from "react"
 
-interface DashboardClientProps {
-  session: Session
-}
-
-export default function DashboardClient({ session }: DashboardClientProps) {
-  const refreshTodos = useRef<() => Promise<void>>(null)
+export default function DashboardClient() {
+  const { data: session, status } = useSession()
+  const todoListRef = useRef<{ refresh: () => Promise<void> }>(null)
 
   const handleRefresh = useCallback(async () => {
-    await refreshTodos.current?.()
+    await todoListRef.current?.refresh()
   }, [])
 
+  if (status === "loading") {
+    return <div>Loading...</div>
+  }
+
+  if (!session) {
+    return <div>Please sign in</div>
+  }
+
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Welcome, {session.user?.name || 'User'}</h1>
-          <TodoDialog onSuccess={handleRefresh} />
-        </div>
-        <div className="grid gap-6">
-          <TodoList onRefresh={refresh => refreshTodos.current = refresh} />
-        </div>
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Welcome, {session.user?.name || 'User'}</h1>
+        <TodoDialog onRefresh={handleRefresh} />
       </div>
-    </main>
+      <div className="grid gap-6">
+        <TodoList ref={todoListRef} />
+      </div>
+    </div>
   )
 } 

@@ -31,6 +31,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
+import { useSession } from "next-auth/react"
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -41,21 +42,27 @@ const formSchema = z.object({
 
 type TodoFormValues = z.infer<typeof formSchema>
 
-export function TodoDialog({ onSuccess }: { onSuccess?: () => void }) {
+export function TodoDialog({ onRefresh }: { onRefresh?: () => Promise<void> }) {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const { data: session } = useSession()
   
   const form = useForm<TodoFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      priority: "MEDIUM",
-      dueDate: null,
+      priority: "LOW",
+      dueDate: undefined,
     },
   })
 
   async function onSubmit(data: TodoFormValues) {
+    if (!session) {
+      toast.error("Please sign in")
+      return
+    }
+
     setIsLoading(true)
     try {
       const response = await fetch('/api/todos', {
@@ -63,22 +70,28 @@ export function TodoDialog({ onSuccess }: { onSuccess?: () => void }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        credentials: 'include',
+        body: JSON.stringify({
+          ...data,
+          dueDate: data.dueDate?.toISOString()
+        }),
       })
 
+      const responseData = await response.json()
+
       if (!response.ok) {
-        throw new Error('Failed to create todo')
+        throw new Error(responseData.error || 'Failed to create todo')
       }
 
       toast.success("Todo created successfully")
-      onSuccess?.()
-      setOpen(false)
       form.reset()
-    } catch (error: unknown) {
-      toast.error("Failed to create todo")
-      if (error instanceof Error) {
-        console.error(error.message)
+      setOpen(false)
+      if (onRefresh) {
+        await onRefresh()
       }
+    } catch (error) {
+      console.error('Create todo error:', error)
+      toast.error(error instanceof Error ? error.message : "Failed to create todo")
     } finally {
       setIsLoading(false)
     }
@@ -158,7 +171,22 @@ export function TodoDialog({ onSuccess }: { onSuccess?: () => void }) {
                   <FormControl>
                     <DatePicker 
                       date={field.value} 
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        if (!date) {
+                          field.onChange(null)
+                          return
+                        }
+                        
+                        // Set to noon UTC to avoid timezone issues
+                        const adjustedDate = new Date(Date.UTC(
+                          date.getFullYear(),
+                          date.getMonth(),
+                          date.getDate(),
+                          12, 0, 0, 0
+                        ))
+                        
+                        field.onChange(adjustedDate)
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
