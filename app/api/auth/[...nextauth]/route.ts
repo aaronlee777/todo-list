@@ -1,6 +1,7 @@
 import NextAuth from "next-auth"
 import { authOptions } from "./auth"
 
+
 const auth = NextAuth(authOptions)
 
 // Export the handler directly for each method
