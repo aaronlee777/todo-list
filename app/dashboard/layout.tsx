@@ -1,7 +1,8 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
-import React from "react";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { DashboardClient } from "./DashboardClient";
 
 export default async function DashboardLayout({
   children,
@@ -14,5 +15,11 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  return children;
+  return (
+    <SidebarProvider>
+      <DashboardClient>
+        {children}
+      </DashboardClient>
+    </SidebarProvider>
+  );
 }

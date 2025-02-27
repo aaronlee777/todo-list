@@ -1,26 +1,19 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { TodoList } from "@/app/components/TodoList";
-import { useRef } from "react";
+import { AppSidebar } from "@/components/app-sidebar"
+import { SidebarInset } from "@/components/ui/sidebar"
 
-export default function DashboardClient() {
-  const { data: session, status } = useSession();
-  const todoListRef = useRef<{ refresh: () => Promise<void> }>(null);
-
-  if (status === "loading") {
-    return <div>Loading...</div>;
-  }
-
-  if (!session) {
-    return <div>Please sign in</div>;
-  }
-
+export function DashboardClient({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <div className="space-y-8">
-      <div className="grid gap-6 max-w-5xl mx-auto">
-        <TodoList ref={todoListRef} />
-      </div>
+    <div className="grid lg:grid-cols-[270px_1fr] min-h-screen">
+      <AppSidebar onRefresh={() => {}} />
+      <SidebarInset>
+        {children}
+      </SidebarInset>
     </div>
-  );
+  )
 }

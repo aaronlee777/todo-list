@@ -37,13 +37,12 @@ export async function GET() {
           priority: true,
           dueDate: true,
           completed: true,
-          order: true,
           createdAt: true,
           updatedAt: true
         },
         orderBy: [
           { dueDate: 'asc' },
-          { order: 'asc' }
+          { createdAt: 'desc' }
         ]
       })
 
