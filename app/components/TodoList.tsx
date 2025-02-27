@@ -66,6 +66,10 @@ export interface TodoListRef {
   refresh: () => Promise<void>;
 }
 
+export interface TodoListProps {
+  onCountChange?: (count: number) => void;
+}
+
 // Move findContainer outside the component
 function createFindContainer(todos: Todo[]) {
   return function findContainer(todoId: string) {
@@ -103,7 +107,7 @@ function TodoListCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const TodoList = forwardRef<TodoListRef>((_, ref) => {
+export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange }, ref) => {
   const { data: session } = useSession();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,6 +151,7 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
       });
 
       const data = await response.json();
+      console.log("Fetched todos:", data); // Debug log
 
       if (!response.ok) {
         throw new Error(data.error || data.details || "Failed to fetch todos");
@@ -158,9 +163,12 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
       }));
 
       setTodos(todosWithDates);
+      
+      // Debug log
+      console.log("Active todos count:", todosWithDates.filter(todo => !todo.completed).length);
     } catch (error) {
       console.error("Fetch error:", error);
-      toast.error("Failed to load todos");
+      toast.error("Failed to fetch todos");
     } finally {
       setIsLoading(false);
     }
@@ -312,17 +320,21 @@ export const TodoList = forwardRef<TodoListRef>((_, ref) => {
   }, [fetchTodos]);
 
   // Expose the refresh method via ref
-  useImperativeHandle(
-    ref,
-    () => ({
-      refresh: fetchTodos,
-    }),
-    [fetchTodos]
-  );
+  useImperativeHandle(ref, () => ({
+    refresh: fetchTodos
+  }), [fetchTodos]);
 
+  // Initial fetch
   useEffect(() => {
     fetchTodos();
   }, [fetchTodos]);
+
+  // Update count whenever todos change
+  useEffect(() => {
+    const activeTodosCount = todos.filter(todo => !todo.completed).length;
+    console.log("Updating count:", activeTodosCount); // Debug log
+    onCountChange?.(activeTodosCount);
+  }, [todos, onCountChange]);
 
   if (!session) {
     return null;
