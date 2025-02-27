@@ -1,6 +1,5 @@
 "use client"
 
-import { AppSidebar } from "@/components/app-sidebar"
 import { TodoList } from "@/app/components/TodoList"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -9,9 +8,10 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { useState, useRef } from "react"
+import { AppSidebar } from "@/components/app-sidebar"
 
 export default function Page() {
-  const [todoCount, setTodoCount] = useState(0)
+  const [todoCount, setTodoCount] = useState({ total: 0, filtered: 0 })
   const todoListRef = useRef<{ refresh: () => Promise<void> }>(null)
 
   return (
@@ -28,9 +28,9 @@ export default function Page() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
               <p className="text-sm text-muted-foreground">
-                {todoCount === 0 
+                {todoCount.filtered === 0 
                   ? "No tasks yet" 
-                  : `${todoCount} ${todoCount === 1 ? 'task' : 'tasks'}`
+                  : `${todoCount.filtered} ${todoCount.filtered === 1 ? 'task' : 'tasks'}`
                 }
               </p>
             </div>
@@ -40,9 +40,10 @@ export default function Page() {
           <TodoList 
             ref={todoListRef}
             onCountChange={setTodoCount}
+            filter="today"
           />
         </div>
       </SidebarInset>
     </SidebarProvider>
   )
-}
+} 

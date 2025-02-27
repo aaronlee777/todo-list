@@ -66,7 +66,8 @@ export interface TodoListRef {
 }
 
 export interface TodoListProps {
-  onCountChange?: (count: number) => void;
+  onCountChange?: (count: { total: number; filtered: number }) => void;
+  filter?: 'today' | 'upcoming' | 'all';
 }
 
 // Move findContainer outside the component
@@ -104,7 +105,7 @@ function formatDateKey(dateKey: string) {
   return format(new Date(`${dateKey}T12:00:00.000Z`), "EEEE, MMMM d")
 }
 
-export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange }, ref) => {
+export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange, filter = 'all' }, ref) => {
   const { data: session } = useSession();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,6 +132,46 @@ export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange 
 
   // Memoize the findContainer function
   const findContainer = useMemo(() => createFindContainer(todos), [todos]);
+
+  // Move filterTodos up before it's used by other hooks
+  const filterTodos = useCallback((todos: Todo[]) => {
+    if (filter === 'all') return todos;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return todos.filter(todo => {
+      if (!todo.dueDate) return false;
+      
+      const dueDate = new Date(todo.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (filter === 'today') {
+        return dueDate.getTime() === today.getTime();
+      }
+
+      if (filter === 'upcoming') {
+        return dueDate.getTime() > today.getTime();
+      }
+
+      return true;
+    });
+  }, [filter]);
+
+  // Group todos with useMemo
+  const groupedTodos = useMemo(() => {
+    return filterTodos(todos).reduce((groups, todo) => {
+      if (!todo.completed) {
+        const dateKey = todo.dueDate
+          ? new Date(todo.dueDate).toISOString().split('T')[0]
+          : 'no-date';
+
+        if (!groups[dateKey]) groups[dateKey] = [];
+        groups[dateKey].push(todo);
+      }
+      return groups;
+    }, {} as Record<string, Todo[]>);
+  }, [todos, filterTodos]);
 
   // Memoize fetchTodos with proper dependencies
   const fetchTodos = useCallback(async () => {
@@ -328,10 +369,14 @@ export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange 
 
   // Update count whenever todos change
   useEffect(() => {
-    const activeTodosCount = todos.filter(todo => !todo.completed).length;
-    console.log("Updating count:", activeTodosCount); // Debug log
-    onCountChange?.(activeTodosCount);
-  }, [todos, onCountChange]);
+    const activeTodos = todos.filter(todo => !todo.completed);
+    const filteredTodos = filterTodos(activeTodos);
+    
+    onCountChange?.({
+      total: activeTodos.length,
+      filtered: filteredTodos.length
+    });
+  }, [todos, onCountChange, filterTodos]);
 
   if (!session) {
     return null;
@@ -359,19 +404,6 @@ export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange 
       </div>
     );
   }
-
-  // Group todos and continue with the rest of the component
-  const groupedTodos = todos.reduce((groups, todo) => {
-    if (!todo.completed) {
-      const dateKey = todo.dueDate
-        ? new Date(todo.dueDate).toISOString().split('T')[0]
-        : 'no-date';
-
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(todo);
-    }
-    return groups;
-  }, {} as Record<string, Todo[]>);
 
   return (
     <DndContext

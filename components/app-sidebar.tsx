@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRef } from "react"
+import { usePathname } from "next/navigation"
 import {
   BookOpen,
   Bot,
@@ -30,59 +31,65 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  navMain: [
-    {
-      title: "Today",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-    },
-    {
-      title: "Upcoming",
-      url: "#",
-      icon: Bot,
-    },
-    
-  ],
-  navSecondary: [
-    {
-      title: "Support",
-      url: "#",
-      icon: LifeBuoy,
-    },
-    {
-      title: "Feedback",
-      url: "#",
-      icon: Send,
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
-}
-
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ 
+  onRefresh,
+  ...props 
+}: React.ComponentProps<typeof Sidebar> & {
+  onRefresh: () => Promise<void>
+}) {
   const dialogRef = useRef<{ showModal: () => void }>(null)
+  const pathname = usePathname()
+
+  const data = {
+    user: {
+      name: "shadcn",
+      email: "m@example.com",
+      avatar: "/avatars/shadcn.jpg",
+    },
+    navMain: [
+      {
+        title: "Today",
+        url: "/today",
+        icon: SquareTerminal,
+        isActive: pathname === "/today",
+      },
+      {
+        title: "Upcoming",
+        url: "/upcoming",
+        icon: Bot,
+        isActive: pathname === "/upcoming",
+      },
+    ],
+    navSecondary: [
+      {
+        title: "Support",
+        url: "#",
+        icon: LifeBuoy,
+      },
+      {
+        title: "Feedback",
+        url: "#",
+        icon: Send,
+      },
+    ],
+    projects: [
+      {
+        name: "Design Engineering",
+        url: "#",
+        icon: Frame,
+      },
+      {
+        name: "Sales & Marketing",
+        url: "#",
+        icon: PieChart,
+      },
+      {
+        name: "Travel",
+        url: "#",
+        icon: Map,
+      },
+    ],
+  }
 
   return (
     <Sidebar variant="inset" {...props}>
@@ -107,7 +114,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <NavUser user={data.user} />
       </SidebarFooter>
-      <TodoDialog ref={dialogRef} onRefresh={() => {}} />
+      <TodoDialog ref={dialogRef} onRefresh={onRefresh} />
     </Sidebar>
   )
 }
