@@ -31,7 +31,6 @@ import { toast } from "sonner";
 import { useDroppable } from "@dnd-kit/core";
 import { DragOverlayItem } from "./DragOverlayItem";
 import { useSession } from "next-auth/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TodoDialog } from "./TodoDialog";
@@ -98,13 +97,11 @@ function DroppableSection({
   return <div ref={setNodeRef}>{children}</div>;
 }
 
-// Add this common card structure
-function TodoListCard({ children }: { children: React.ReactNode }) {
-  return (
-    <Card className="w-full mx-auto transition-opacity duration-200">
-      {children}
-    </Card>
-  );
+// Add this function before the TodoList component
+function formatDateKey(dateKey: string) {
+  if (dateKey === "no-date") return "No Due Date"
+  if (dateKey === "today") return "Today"
+  return format(new Date(`${dateKey}T12:00:00.000Z`), "EEEE, MMMM d")
 }
 
 export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange }, ref) => {
@@ -342,38 +339,24 @@ export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange 
 
   if (isLoading) {
     return (
-      <TodoListCard>
-        <CardContent className="space-y-4 pt-6">
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="h-24 rounded-lg border border-gray-200 animate-pulse"
-            />
-          ))}
-        </CardContent>
-      </TodoListCard>
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div
+            key={i}
+            className="h-24 rounded-lg border border-gray-200 animate-pulse"
+          />
+        ))}
+      </div>
     );
   }
 
-  // Calculate active todos count here
   const activeTodosCount = todos.filter(todo => !todo.completed).length;
 
   if (activeTodosCount === 0) {
     return (
-      <TodoListCard>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>You have no tasks</CardTitle>
-          <Button size="sm" onClick={() => dialogRef.current?.showModal()}>
-            <Plus className="h-4 w-4" />
-            Add new todo
-          </Button>
-        </CardHeader>
-        <Separator />
-        <CardContent className="text-center py-12">
-          <p className="text-gray-500">Create your first todo!</p>
-        </CardContent>
-        <TodoDialog ref={dialogRef} onRefresh={fetchTodos} />
-      </TodoListCard>
+      <div className="text-center py-12">
+        <p className="text-gray-500">Create your first todo!</p>
+      </div>
     );
   }
 
@@ -391,144 +374,116 @@ export const TodoList = forwardRef<TodoListRef, TodoListProps>(({ onCountChange 
   }, {} as Record<string, Todo[]>);
 
   return (
-    <TodoListCard>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>
-          You have {activeTodosCount} task{activeTodosCount !== 1 ? "s" : ""}
-        </CardTitle>
-        <Button size="sm" onClick={() => dialogRef.current?.showModal()}>
-          <Plus className="h-4 w-4" />
-          Add new todo
-        </Button>
-      </CardHeader>
-      <Separator />
-      <CardContent>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="space-y-6">
-            {Object.keys(groupedTodos).map((dateKey) => {
-              const dateTodos = groupedTodos[dateKey];
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="w-full space-y-4">
+        {Object.entries(groupedTodos).map(([dateKey, todos]) => {
+          return (
+            <div key={dateKey} className="w-full">
+              <h2 className="mb-2 text-sm font-semibold text-muted-foreground">
+                {formatDateKey(dateKey)}
+              </h2>
+              <DroppableSection dateKey={dateKey}>
+                <SortableContext
+                  items={todos.map((todo) => todo.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="w-full">
+                    {todos.map((todo, index) => {
+                      const isLastItem = index === todos.length - 1;
+                      const isOverThisItem =
+                        sorting.overId === todo.id &&
+                        dragState.currentParent === dateKey;
+                      const isOverSection =
+                        sorting.overId === `droppable-${dateKey}`;
 
-              return (
-                <div key={dateKey} className="space-y-2">
-                  <div>
-                    <h3 className="text-sm font-medium">
-                      {dateKey === "no-date"
-                        ? "No Due Date"
-                        : dateKey === "today"
-                        ? "Today"
-                        : format(
-                            new Date(`${dateKey}T12:00:00.000Z`),
-                            "EEEE, MMMM d"
+                      const showGap = (() => {
+                        if (!isOverThisItem && !isOverSection) return null;
+                        if (isOverSection && isLastItem) return "after";
+                        if (!isOverThisItem || sorting.activeId === todo.id)
+                          return null;
+
+                        const activeRect = sorting.activeRect;
+                        const overRect = sorting.overRect;
+                        if (!activeRect?.initial || !overRect) return null;
+
+                        const activeCenter = activeRect.initial.top + activeRect.initial.height / 2;
+                        const overCenter = overRect.top + overRect.height / 2;
+
+                        return activeCenter < overCenter ? "before" : "after";
+                      })();
+
+                      return (
+                        <div
+                          key={`${dateKey}-${todo.id}${
+                            dragState.currentParent === dateKey
+                              ? "-current"
+                              : ""
+                          }`}
+                        >
+                          {showGap === "before" && (
+                            <div style={{ height: "72px" }} />
                           )}
-                    </h3>
-                    <Separator className="mt-2" />
+                          <div
+                            style={{
+                              display:
+                                dragState.initialParent === dateKey &&
+                                dragState.currentParent !== dateKey &&
+                                activeTodo?.id === todo.id
+                                  ? "none"
+                                  : undefined,
+                              opacity: todo.completed ? 0 : 1,
+                              transition: "opacity 150ms ease-in-out",
+                            }}
+                          >
+                            <DraggableTodoItem
+                              todo={todo}
+                              onComplete={() => {
+                                // Update local state only
+                                setTodos(prev => prev.map(t => 
+                                  t.id === todo.id ? { ...t, completed: true } : t
+                                ))
+                                return Promise.resolve()
+                              }}
+                              onUpdate={handleTodoUpdate}
+                            />
+                            {!isLastItem && !todo.completed && (
+                              <Separator />
+                            )}
+                          </div>
+                          {showGap === "after" && (
+                            <div style={{ height: "72px" }} />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <DroppableSection dateKey={dateKey}>
-                    <SortableContext
-                      items={dateTodos.map((todo) => todo.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div>
-                        {dateTodos.map((todo, index) => {
-                          const isLastItem = index === dateTodos.length - 1;
-                          const isOverThisItem =
-                            sorting.overId === todo.id &&
-                            dragState.currentParent === dateKey;
-                          const isOverSection =
-                            sorting.overId === `droppable-${dateKey}`;
+                </SortableContext>
+              </DroppableSection>
+            </div>
+          );
+        })}
+      </div>
 
-                          const showGap = (() => {
-                            if (!isOverThisItem && !isOverSection) return null;
-                            if (isOverSection && isLastItem) return "after";
-                            if (!isOverThisItem || sorting.activeId === todo.id)
-                              return null;
-
-                            const activeRect = sorting.activeRect;
-                            const overRect = sorting.overRect;
-                            if (!activeRect?.initial || !overRect) return null;
-
-                            const activeCenter = activeRect.initial.top + activeRect.initial.height / 2;
-                            const overCenter = overRect.top + overRect.height / 2;
-
-                            return activeCenter < overCenter ? "before" : "after";
-                          })();
-
-                          return (
-                            <div
-                              key={`${dateKey}-${todo.id}${
-                                dragState.currentParent === dateKey
-                                  ? "-current"
-                                  : ""
-                              }`}
-                            >
-                              {showGap === "before" && (
-                                <div style={{ height: "72px" }} />
-                              )}
-                              <div
-                                style={{
-                                  display:
-                                    dragState.initialParent === dateKey &&
-                                    dragState.currentParent !== dateKey &&
-                                    activeTodo?.id === todo.id
-                                      ? "none"
-                                      : undefined,
-                                  opacity: todo.completed ? 0 : 1,
-                                  transition: "opacity 150ms ease-in-out",
-                                }}
-                              >
-                                <DraggableTodoItem
-                                  todo={todo}
-                                  onComplete={() => {
-                                    // Update local state only
-                                    setTodos(prev => prev.map(t => 
-                                      t.id === todo.id ? { ...t, completed: true } : t
-                                    ))
-                                    return Promise.resolve()
-                                  }}
-                                  onUpdate={handleTodoUpdate}
-                                />
-                                {!isLastItem && !todo.completed && (
-                                  <Separator />
-                                )}
-                              </div>
-                              {showGap === "after" && (
-                                <div style={{ height: "72px" }} />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </SortableContext>
-                  </DroppableSection>
-                </div>
-              );
-            })}
+      <DragOverlay dropAnimation={null}>
+        {activeTodo && (
+          <div
+            style={{
+              width: "100%",
+              cursor: "grabbing",
+              transform: "rotate(2deg)",
+            }}
+          >
+            <DragOverlayItem todo={activeTodo} />
           </div>
-
-          <DragOverlay dropAnimation={null}>
-            {activeTodo && (
-              <div
-                style={{
-                  width: "calc(100vw - 2rem)",
-                  maxWidth: "64rem",
-                  cursor: "grabbing",
-                  transform: "rotate(2deg)",
-                }}
-              >
-                <DragOverlayItem todo={activeTodo} />
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-      </CardContent>
-      <TodoDialog ref={dialogRef} onRefresh={fetchTodos} />
-    </TodoListCard>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 });
 
